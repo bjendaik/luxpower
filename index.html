@@ -3,426 +3,662 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LuxPower SNA - Cloud Dashboard</title>
+  <title>LuxPower SNA - Cloud Control Dashboard</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    :root {
-      --bg: #0b1120;
-      --card: #151f32;
-      --border: #263554;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --solar: #f59e0b;
-      --bat: #10b981;
-      --grid: #a855f7;
-      --load: #3b82f6;
-      --danger: #ef4444;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+    :root { --bg:#0b1120; --card:#151f32; --border:#263554; --text:#e2e8f0; --muted:#94a3b8;
+            --accent:#38bdf8; --solar:#f59e0b; --bat:#10b981; --grid:#a855f7; --load:#3b82f6; --danger:#ef4444; }
+    * { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',system-ui,sans-serif; }
+    body { background:var(--bg); color:var(--text); min-height:100vh; }
+    header { background:linear-gradient(135deg,#0f172a,#1e293b); border-bottom:1px solid var(--border);
+             padding:10px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;
+             position:sticky; top:0; z-index:100; min-height:60px; flex-wrap:wrap; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:1.1rem; font-weight:800; color:#fff; }
+    .brand span.hl { color:var(--solar); }
+    .chip-tag { background:rgba(56,189,248,.15); color:var(--accent); border:1px solid rgba(56,189,248,.3);
+                font-size:.7rem; padding:2px 7px; border-radius:6px; font-weight:700; }
+    .status-bar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .badge { padding:4px 10px; border-radius:999px; font-size:.74rem; font-weight:600;
+             display:inline-flex; align-items:center; gap:5px; background:#1e293b; border:1px solid var(--border); }
     
-    header {
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 20px;
-      display: flex; justify-content: space-between; align-items: center; gap: 12px;
-      position: sticky; top: 0; z-index: 50; flex-wrap: wrap;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 800; color: #fff; }
-    .brand span { color: var(--solar); }
-    .chip {
-      background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3);
-      font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; font-weight: 700;
-    }
-
-    .status-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .badge {
-      padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
-      display: inline-flex; align-items: center; gap: 6px; background: #1e293b; border: 1px solid var(--border);
-    }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-    .dot.ok { background: #10b981; box-shadow: 0 0 8px #10b981; }
-    .dot.err { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
-
-    .container { max-width: 1280px; margin: 20px auto; padding: 0 16px; }
-
-    /* CẤU HÌNH MQTT MODAL / BAR */
-    .cfg-card {
-      background: #0f172a; border: 1px solid var(--border); border-radius: 12px;
-      padding: 16px; margin-bottom: 20px;
-    }
-    .cfg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; cursor: pointer; }
-    .cfg-title { font-size: 0.9rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-    .cfg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 10px; }
-    .cfg-group label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
-    .cfg-group input {
-      width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
-      background: #0b1120; color: #fff; font-size: 0.85rem; outline: none; font-family: monospace;
-    }
-    .cfg-group input:focus { border-color: var(--accent); }
-    .btn-row { display: flex; gap: 10px; margin-top: 12px; }
-    .btn {
-      padding: 8px 18px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.85rem;
-      cursor: pointer; transition: opacity 0.2s;
-    }
-    .btn:hover { opacity: 0.9; }
-    .btn-primary { background: var(--accent); color: #0f172a; }
-    .btn-danger { background: var(--danger); color: #fff; }
-
-    /* CARDS */
-    .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 18px; }
-    .card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-      padding: 18px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); position: relative; overflow: hidden;
-    }
-    .card::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 4px; }
-    .card.solar::before { background: var(--solar); }
-    .card.bat::before { background: var(--bat); }
-    .card.grid::before { background: var(--grid); }
-    .card.load::before { background: var(--load); }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background 0.2s; }
+    .dot.ok { background:#10b981; box-shadow:0 0 6px #10b981; }
+    .dot.err { background:#ef4444; box-shadow:0 0 6px #ef4444; }
     
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .card-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; }
-    .big-val { font-size: 2.2rem; font-weight: 800; margin-bottom: 8px; color: #fff; line-height: 1.1; }
-    .big-val small { font-size: 0.95rem; font-weight: 500; color: var(--muted); }
-
-    .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,0.07); font-size: 0.85rem; }
-    .metric-row:last-child { border-bottom: none; }
-    .metric-label { color: var(--muted); }
-    .metric-val { font-weight: 600; color: #f8fafc; }
-
-    .soc-bar { width: 100%; height: 8px; background: #0b1120; border-radius: 999px; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border); }
-    .soc-fill { height: 100%; background: linear-gradient(90deg, #059669, #34d399); width: 0%; transition: width 0.4s ease; }
-
-    .json-box {
-      background: #090d16; border: 1px solid var(--border); border-radius: 10px;
-      padding: 14px; font-family: 'Consolas', monospace; font-size: 0.8rem; color: #38bdf8;
-      overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 320px;
+    @keyframes flashDotAnim {
+      0% { background: #34d399; box-shadow: 0 0 16px 4px #34d399; transform: scale(1.6); }
+      50% { background: #a7f3d0; box-shadow: 0 0 22px 6px #34d399; transform: scale(1.8); }
+      100% { background: #10b981; box-shadow: 0 0 6px #10b981; transform: scale(1); }
     }
-    
-    .dynamic-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px;
+    .dot.flash { animation: flashDotAnim 0.5s ease-out; }
+
+    .sb-tgl { display:none; background:#1e293b; border:1px solid var(--border); color:var(--text);
+              font-size:1.15rem; width:38px; height:38px; border-radius:10px; cursor:pointer;
+              align-items:center; justify-content:center; flex-shrink:0; }
+    @media (min-width:901px) { .sb-tgl.d { display:inline-flex; } }
+    @media (max-width:900px) { .sb-tgl.m { display:inline-flex; } }
+    .layout { display:flex; min-height:calc(100vh - 60px); }
+    .sidebar { width:240px; flex-shrink:0; background:#0f172a; border-right:1px solid var(--border);
+               padding:16px 12px; position:sticky; top:60px; height:calc(100vh - 60px);
+               overflow-y:auto; transition:width .25s, transform .25s; }
+    .sidebar.collapsed { width:64px; padding:16px 8px; }
+    .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-title, .sidebar.collapsed .sidebar-footer { display:none; }
+    .sidebar.collapsed .nav-item { justify-content:center; padding:12px 0; }
+    .sidebar-title { font-size:.68rem; text-transform:uppercase; color:var(--muted); font-weight:700;
+                     letter-spacing:.6px; padding:0 8px 6px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+    .nav-item { display:flex; align-items:center; gap:12px; padding:12px 14px; margin-bottom:4px;
+                border-radius:10px; cursor:pointer; color:var(--muted); font-weight:600; font-size:.9rem;
+                transition:all .15s; border:1px solid transparent; white-space:nowrap; overflow:hidden; }
+    .nav-item:hover { background:#1e293b; color:var(--text); }
+    .nav-item.active { background:var(--accent); color:#0f172a; border-color:var(--accent); }
+    .nav-icon { font-size:1.1rem; flex-shrink:0; width:22px; text-align:center; }
+    .nav-label { flex:1; overflow:hidden; text-overflow:ellipsis; }
+    .sidebar-footer { margin-top:16px; padding:10px 8px; font-size:.72rem; color:var(--muted);
+                      border-top:1px solid var(--border); line-height:1.6; }
+    .main { flex:1; min-width:0; padding:18px; }
+    .sb-ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:150; }
+    .sb-ov.open { display:block; }
+    @media (max-width:900px) {
+      .sidebar { position:fixed; top:0; left:0; height:100vh; z-index:200; transform:translateX(-100%);
+                 width:260px; box-shadow:4px 0 20px rgba(0,0,0,.5); padding:16px 12px; }
+      .sidebar.open { transform:translateX(0); }
+      .sidebar.collapsed { width:260px; padding:16px 12px; }
+      .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-title, .sidebar.collapsed .sidebar-footer { display:block; }
+      .sidebar.collapsed .nav-item { justify-content:flex-start; padding:12px 14px; }
+      .main { padding:12px; }
     }
-    .dynamic-item {
-      background: #0f172a; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
-    }
-    .dynamic-key { font-size: 0.72rem; color: var(--muted); font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dynamic-val { font-size: 0.9rem; color: var(--accent); font-family: monospace; font-weight: 700; margin-top: 2px; }
+    .power-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:16px; }
+    @media (min-width:1100px) { .power-grid { grid-template-columns:repeat(4,1fr); } }
+    @media (max-width:600px) { .power-grid { grid-template-columns:1fr; } }
+    .power-card { background:var(--card); border:1px solid var(--border); border-radius:16px;
+                  padding:18px 16px; position:relative; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,.25); }
+    .power-card::before { content:""; position:absolute; top:0; left:0; width:100%; height:5px; }
+    .power-card.pv::before { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
+    .power-card.bat::before { background:linear-gradient(90deg,#10b981,#34d399); }
+    .power-card.grid::before { background:linear-gradient(90deg,#a855f7,#c084fc); }
+    .power-card.load::before { background:linear-gradient(90deg,#3b82f6,#60a5fa); }
+    .pc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:6px; }
+    .pc-title { display:flex; align-items:center; gap:8px; font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+    .pc-icon { font-size:1.3rem; }
+    .pc-tag { font-size:.7rem; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.08); color:var(--muted); }
+    .pc-value { font-size:2.1rem; font-weight:800; color:#fff; line-height:1; margin-bottom:4px; }
+    .pc-value small { font-size:.95rem; font-weight:600; color:var(--muted); }
+    .pc-sub { font-size:.78rem; color:var(--muted); margin-bottom:12px; line-height:1.45; }
+    .pc-sub strong { color:var(--text); }
+    .pc-rows { border-top:1px dashed rgba(255,255,255,.08); padding-top:8px; }
+    .pc-row { display:flex; justify-content:space-between; font-size:.79rem; padding:3.5px 0; gap:8px; }
+    .pc-row span:first-child { color:var(--muted); }
+    .pc-row span:last-child { font-weight:600; color:#f8fafc; text-align:right; }
+    .soc-bar { height:10px; background:#0f172a; border-radius:999px; overflow:hidden; margin:8px 0 10px; border:1px solid var(--border); }
+    .soc-fill { height:100%; background:linear-gradient(90deg,#059669,#34d399); transition:width .4s; }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+    .stat-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .stat-label { font-size:.72rem; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:.4px; margin-bottom:6px; }
+    .stat-val { font-size:1.35rem; font-weight:800; color:#fff; }
+    .stat-val small { font-size:.8rem; color:var(--muted); font-weight:600; }
+    .stat-sub { font-size:.75rem; color:var(--muted); margin-top:4px; }
+    .stat-box.pv .stat-val { color:var(--solar); }
+    .stat-box.bat .stat-val { color:var(--bat); }
+    .stat-box.grid .stat-val { color:var(--grid); }
+    .stat-box.load .stat-val { color:var(--load); }
+    .stat-box.money .stat-val { color:#34d399; }
+    .stat-box.cost .stat-val { color:#f87171; }
+    .chart-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; }
+    .chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+    .chart-title { font-size:.9rem; font-weight:700; }
+    .chart-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:.78rem; }
+    .legend-item { display:flex; align-items:center; gap:5px; color:var(--muted); cursor:pointer; user-select:none; }
+    .legend-item.off { opacity:.35; }
+    .legend-dot { width:10px; height:10px; border-radius:50%; }
+    .chart-wrap { position:relative; width:100%; height:280px; }
+    .chart-svg { width:100%; height:100%; display:block; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:18px; margin-bottom:16px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px;
+            box-shadow:0 8px 20px rgba(0,0,0,.25); position:relative; overflow:hidden; }
+    .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap; }
+    .card-title { font-size:.85rem; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; }
+    .form-group { margin-bottom:14px; }
+    .form-group label { display:block; margin-bottom:6px; font-size:.85rem; color:var(--muted); font-weight:600; }
+    .form-group input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+                        background:#0b1120; color:#fff; font-size:.92rem; outline:none; }
+    .form-group input:focus { border-color:var(--accent); }
+    .checkbox-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer;
+                    background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid var(--border); }
+    .checkbox-row input { width:18px; height:18px; accent-color:var(--accent); }
+    .btn-row { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; align-items:center; }
+    .btn { padding:11px 22px; border-radius:10px; border:none; font-weight:700; font-size:.9rem; cursor:pointer; transition:opacity .2s; }
+    .btn:hover:not(:disabled) { opacity:.9; }
+    .btn:disabled { opacity:.5; cursor:wait; }
+    .btn-primary { background:var(--accent); color:#0f172a; }
+    .btn-danger { background:var(--danger); color:#fff; }
+    .btn-secondary { background:#334155; color:#fff; }
+    .reg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+    .reg-item { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+                display:flex; justify-content:space-between; align-items:center; gap:8px;
+                font-size:.82rem; cursor:pointer; user-select:none; transition:all .15s; position:relative; }
+    .reg-item:hover { background:#16233b; }
+    .reg-item.on { border-color:#10b981; background:rgba(16,185,129,.08); }
+    .reg-item.tele { border-left:3px solid #38bdf8; }
+    .reg-idx { color:var(--muted); font-weight:600; font-size:.7rem; }
+    .reg-name { color:#cbd5e1; font-weight:600; font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .reg-val { color:var(--accent); font-family:monospace; font-weight:700; }
+    .reg-toggle { width:32px; height:18px; background:#334155; border-radius:999px; position:relative; flex-shrink:0; transition:background .2s; }
+    .reg-toggle::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; background:#94a3b8; border-radius:50%; transition:all .2s; }
+    .reg-item.on .reg-toggle { background:#10b981; }
+    .reg-item.on .reg-toggle::after { left:16px; background:#fff; }
+
+    .eye-btn { position:absolute; right:8px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; padding:4px; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .toast { position:fixed; bottom:20px; right:20px; background:#10b981; color:#06281e; padding:12px 20px; border-radius:10px; font-weight:700; display:none; z-index:300; }
   </style>
 </head>
 <body>
 
 <header>
-  <div class="brand">
-    ⚡ LUXPOWER <span>SNA</span>
-    <span class="chip">GitHub Pages</span>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button class="sb-tgl d" onclick="tglSbD()">☰</button>
+    <button class="sb-tgl m" onclick="openSbM()">☰</button>
+    <div class="brand">⚡ LUXPOWER <span class="hl">SNA</span> <span class="chip-tag">Cloud WSS Control</span></div>
   </div>
   <div class="status-bar">
-    <div class="badge"><span class="dot" id="dotMqtt"></span><span id="txtMqttStatus">Chưa kết nối</span></div>
-    <div class="badge">Cập nhật: <span id="txtLastTime">--:--:--</span></div>
-    <button class="btn btn-primary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="toggleConfig()">⚙️ Cấu hình WSS</button>
+    <div class="badge"><span class="dot" id="dotInv"></span><span id="txtInvStatus">INV: OFF</span></div>
+    <div class="badge"><span class="dot" id="dotMqtt"></span><span id="txtMqttStatus">MQTT: OFF</span></div>
+    <div class="badge">S3: <span id="txtS3Temp">--</span>°C</div>
+    <div class="badge">WiFi: <span id="txtRssi">--</span> dBm</div>
   </div>
 </header>
 
-<div class="container">
-  <!-- KHUNG CẤU HÌNH WEBSOCKET MQTT -->
-  <div class="cfg-card" id="cfgPanel">
-    <div class="cfg-header" onclick="toggleConfig()">
-      <div class="cfg-title">📡 Cấu hình kết nối MQTT over WebSocket (WSS)</div>
-      <span style="font-size: 0.8rem; color: var(--muted);">Bấm để ẩn/hiện</span>
-    </div>
-    <form onsubmit="connectMqtt(event)">
-      <div class="cfg-grid">
-        <div class="cfg-group">
-          <label>WSS Broker Host (Domain)</label>
-          <input type="text" id="cfgHost" placeholder="VD: xxx.s1.eu.hivemq.cloud" required>
+<div class="sb-ov" id="sbOv" onclick="closeSbM()"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-title">Giám sát</div>
+    <div class="nav-item active" data-tab="tabMonitor" onclick="swTab('tabMonitor',this)"><span class="nav-icon">📊</span><span class="nav-label">Theo Dõi Biến Tần</span></div>
+    <div class="sidebar-title" style="margin-top:14px;">Cài đặt từ xa (MQTT)</div>
+    <div class="nav-item" data-tab="tabWssCfg" onclick="swTab('tabWssCfg',this)"><span class="nav-icon">🔑</span><span class="nav-label">Kết Nối Broker WSS</span></div>
+    <div class="nav-item" data-tab="tabRegs" onclick="swTab('tabRegs',this)"><span class="nav-icon">🔢</span><span class="nav-label">Thanh Ghi &amp; Field</span></div>
+    <div class="nav-item" data-tab="tabCfgDongle" onclick="swTab('tabCfgDongle',this)"><span class="nav-icon">🔌</span><span class="nav-label">Kết Nối Dongle</span></div>
+    <div class="nav-item" data-tab="tabCfgMqtt" onclick="swTab('tabCfgMqtt',this)"><span class="nav-icon">📡</span><span class="nav-label">MQTT Trên ESP32</span></div>
+    <div class="nav-item" data-tab="tabCfgWifi" onclick="swTab('tabCfgWifi',this)"><span class="nav-icon">📶</span><span class="nav-label">Wi-Fi ESP32</span></div>
+    <div class="sidebar-footer"><div>Điều khiển từ xa qua MQTT</div><div style="margin-top:6px;">GitHub Pages WSS</div></div>
+  </aside>
+
+  <main class="main">
+
+    <!-- 1. TAB THEO DÕI BIẾN TẦN -->
+    <div id="tabMonitor" class="tab-content active">
+      <div class="power-grid">
+        <!-- SOLAR PV -->
+        <div class="power-card pv">
+          <div class="pc-header"><div class="pc-title"><span class="pc-icon">☀️</span> SOLAR</div><div class="pc-tag" id="tagPvDay">-- kWh</div></div>
+          <div class="pc-value"><span id="valPvTotal">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>PV1:</strong> <span id="valPv1P">0</span> W · <strong>PV2:</strong> <span id="valPv2P">0</span> W</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>PV1 (V · A)</span><span><span id="valPv1V">0.0 V</span> · <span id="valPv1I" style="color:#fbbf24;">0.0 A</span></span></div>
+            <div class="pc-row"><span>PV2 (V · A)</span><span><span id="valPv2V">0.0 V</span> · <span id="valPv2I" style="color:#fbbf24;">0.0 A</span></span></div>
+            <div class="pc-row"><span>Tổng PV hôm nay</span><span id="valEpvDay" style="color:var(--solar);">0.0 kWh</span></div>
+          </div>
         </div>
-        <div class="cfg-group">
-          <label>WSS Port (HiveMQ: 8884, EMQX: 8084)</label>
-          <input type="number" id="cfgPort" value="8884" required>
+
+        <!-- BATTERY -->
+        <div class="power-card bat">
+          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🔋</span> BATTERY</div><div class="pc-tag" id="tagBatState">Standby</div></div>
+          <div class="pc-value"><span id="valSoc">0</span> <small>% SOC</small></div>
+          <div class="soc-bar"><div class="soc-fill" id="barSoc"></div></div>
+          <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVbat">0.0</span> V · <strong>Nhiệt độ:</strong> <span id="valTbat">0</span>°C</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Dòng điện Pin</span><span id="valIbat" style="font-weight:700;">0.0 A</span></div>
+            <div class="pc-row"><span>Công suất Sạc / Xả</span><span><span id="valPchg">0 W</span> / <span id="valPdis">0 W</span></span></div>
+            <div class="pc-row"><span>Sạc / Xả hôm nay</span><span><span id="valEchg">0.0</span> / <span id="valEdis">0.0</span> kWh</span></div>
+          </div>
         </div>
-        <div class="cfg-group">
-          <label>Topic đăng ký nhận JSON</label>
-          <input type="text" id="cfgTopic" value="luxpower/sna/state" required>
+
+        <!-- GRID -->
+        <div class="power-card grid">
+          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🗼</span> GRID</div><div class="pc-tag" id="tagGridState">--</div></div>
+          <div class="pc-value"><span id="valPgridNet">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVgrid">0.0</span> V · <strong>Dòng lưới:</strong> <span id="valIgridNet">0.0</span> A</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Tần số lưới</span><span id="valFgrid">0.00 Hz</span></div>
+            <div class="pc-row"><span>Mua lưới</span><span><span id="valPtoUser">0 W</span> (<span id="valItoUser" style="color:#94a3b8;">0.0 A</span>)</span></div>
+            <div class="pc-row"><span>Đẩy lưới</span><span><span id="valPtoGrid">0 W</span> (<span id="valItoGrid" style="color:#94a3b8;">0.0 A</span>)</span></div>
+          </div>
         </div>
-        <div class="cfg-group">
-          <label>Username</label>
-          <input type="text" id="cfgUser" placeholder="Username">
+
+        <!-- LOAD -->
+        <div class="power-card load">
+          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🏠</span> LOAD</div><div class="pc-tag">Status: <span id="valStatus">0</span></div></div>
+          <div class="pc-value"><span id="valPload">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>Dòng tải:</strong> <span id="valIload">0.0</span> A · <strong>EPS:</strong> <span id="valPeps">0</span> W</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Inverter</span><span id="valPinv">0 W</span></div>
+            <div class="pc-row"><span>Nhiệt độ trong</span><span id="valTinner">0°C</span></div>
+            <div class="pc-row"><span>Tiêu thụ hôm nay</span><span id="valEload" style="color:var(--load);">0.0 kWh</span></div>
+          </div>
         </div>
-        <div class="cfg-group">
-          <label>Password</label>
-          <input type="password" id="cfgPass" placeholder="Password">
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header"><div class="chart-title">📈 Công Suất Thời Gian Thực</div></div>
+        <div class="chart-wrap"><svg class="chart-svg" id="powerChart" viewBox="0 0 800 280" preserveAspectRatio="none"></svg></div>
+      </div>
+    </div>
+
+    <!-- 2. TAB CẤU HÌNH WSS BROKER TRÊN WEB (ĐỂ KẾT NỐI BROKER TỪ GITHUB) -->
+    <div id="tabWssCfg" class="tab-content">
+      <form onsubmit="connectWssBroker(event)">
+        <div class="card">
+          <div class="card-header"><span class="card-title">🔑 Kết Nối MQTT WebSocket (WSS)</span></div>
+          <div class="form-grid">
+            <div class="form-group"><label>Host Broker (Domain)</label><input type="text" id="wssHost" placeholder="xxx.s1.eu.hivemq.cloud" required></div>
+            <div class="form-group"><label>Port WSS (HiveMQ: 8884, EMQX: 8084)</label><input type="number" id="wssPort" value="8884" required></div>
+            <div class="form-group"><label>Base Topic (Ví dụ: luxpower/sna)</label><input type="text" id="wssTopic" value="luxpower/sna" required></div>
+            <div class="form-group"><label>Username</label><input type="text" id="wssUser"></div>
+            <div class="form-group">
+              <label>Password</label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="wssPass" style="padding-right:40px;">
+                <button type="button" class="eye-btn" onclick="tglPwd('wssPass', this)">👁️</button>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary" id="btnWssConnect">🔗 Kết Nối Broker WSS</button>
+            <button type="button" class="btn btn-danger" onclick="disconnectWssBroker()">🔌 Ngắt Kết Nối</button>
+          </div>
         </div>
-      </div>
-      <div class="btn-row">
-        <button type="submit" class="btn btn-primary" id="btnConnect">🔗 Kết Nối Broker</button>
-        <button type="button" class="btn btn-danger" onclick="disconnectMqtt()">🔌 Ngắt Kết Nối</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- DASHBOARD CHÍNH -->
-  <div class="grid-cards">
-    <!-- SOLAR PV -->
-    <div class="card solar">
-      <div class="card-header">
-        <span class="card-title">☀️ Giàn Pin Mặt Trời (PV)</span>
-        <span class="badge" id="valEpvDay">0.0 kWh hôm nay</span>
-      </div>
-      <div class="big-val"><span id="valPvTotal">0</span> <small>W</small></div>
-      <div class="metric-row"><span class="metric-label">PV1 Công suất / Điện áp</span><span class="metric-val"><span id="valPv1P">0</span> W (<span id="valPv1V">0.0</span> V)</span></div>
-      <div class="metric-row"><span class="metric-label">PV2 Công suất / Điện áp</span><span class="metric-val"><span id="valPv2P">0</span> W (<span id="valPv2V">0.0</span> V)</span></div>
-      <div class="metric-row"><span class="metric-label">Điện áp DC Bus 1 / Bus 2</span><span class="metric-val"><span id="valBus1">0.0</span> V / <span id="valBus2">0.0</span> V</span></div>
+      </form>
     </div>
 
-    <!-- BATTERY & BMS -->
-    <div class="card bat">
-      <div class="card-header">
-        <span class="card-title">🔋 Pin Lưu Trữ & BMS</span>
-        <span class="badge" id="badgeBatState">Standby</span>
+    <!-- 3. TAB BẬT TẮT THANH GHI TỪ XA -->
+    <div id="tabRegs" class="tab-content">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title">📡 Field Telemetry (20 Field)</span></div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="remoteToggleAllTele(true)">✅ Bật tất cả</button>
+          <button class="btn btn-secondary" onclick="remoteToggleAllTele(false)">⬜ Tắt tất cả</button>
+        </div>
+        <div class="reg-grid" id="teleContainer"></div>
       </div>
-      <div class="big-val"><span id="valSoc">0</span> <small>% SOC</small></div>
-      <div class="soc-bar"><div class="soc-fill" id="barSoc"></div></div>
-      <div class="metric-row"><span class="metric-label">Điện áp Pin / SOH</span><span class="metric-val"><span id="valVbat">0.0</span> V (SOH: <span id="valSoh">--</span>%)</span></div>
-      <div class="metric-row"><span class="metric-label">Công suất Sạc / Xả</span><span class="metric-val"><span id="valPchg">0</span> W / <span id="valPdis">0</span> W</span></div>
-      <div class="metric-row"><span class="metric-label">Giới hạn BMS (Nạp / Xả)</span><span class="metric-val"><span id="valBmsMaxChg">0</span> A / <span id="valBmsMaxDis">0</span> A</span></div>
-      <div class="metric-row"><span class="metric-label">Sạc / Xả hôm nay</span><span class="metric-val"><span id="valEchg">0.0</span> / <span id="valEdis">0.0</span> kWh</span></div>
-    </div>
-
-    <!-- GRID -->
-    <div class="card grid">
-      <div class="card-header">
-        <span class="card-title">🗼 Điện Lưới AC</span>
-        <span class="badge" id="badgeGridState">Bình thường</span>
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔢 120 Thanh Ghi Modbus (0x04)</span></div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="remoteToggleAllRegs(true)">✅ Bật tất cả</button>
+          <button class="btn btn-secondary" onclick="remoteToggleAllRegs(false)">⬜ Tắt tất cả</button>
+        </div>
+        <div class="reg-grid" id="regContainer"></div>
       </div>
-      <div class="big-val"><span id="valPgridNet">0</span> <small>W</small></div>
-      <div class="metric-row"><span class="metric-label">Điện áp / Tần số lưới</span><span class="metric-val"><span id="valVgrid">0.0</span> V / <span id="valFgrid">0.00</span> Hz</span></div>
-      <div class="metric-row"><span class="metric-label">Mua lưới / Đẩy lưới</span><span class="metric-val"><span id="valPtoUser">0</span> W / <span id="valPtoGrid">0</span> W</span></div>
-      <div class="metric-row"><span class="metric-label">Mua / Bán hôm nay</span><span class="metric-val"><span id="valEtoUser">0.0</span> / <span id="valEtoGrid">0.0</span> kWh</span></div>
     </div>
 
-    <!-- LOAD & INVERTER -->
-    <div class="card load">
-      <div class="card-header">
-        <span class="card-title">🏠 Phụ Tải & Nhiệt Độ</span>
-        <span class="badge">Trạng thái: <span id="valStatus">--</span></span>
-      </div>
-      <div class="big-val"><span id="valPload">0</span> <small>W</small></div>
-      <div class="metric-row"><span class="metric-label">Ngõ ra EPS Backup</span><span class="metric-val"><span id="valPeps">0</span> W (<span id="valVeps">0.0</span> V)</span></div>
-      <div class="metric-row"><span class="metric-label">Nhiệt độ Trong / Tản 1 / Tản 2</span><span class="metric-val"><span id="valTinner">0</span>°C / <span id="valTrad1">0</span>°C / <span id="valTrad2">0</span>°C</span></div>
-      <div class="metric-row"><span class="metric-label">Nhiệt độ ESP32-S3 / WiFi RSSI</span><span class="metric-val"><span id="valS3Temp">0.0</span>°C / <span id="valRssi">--</span> dBm</span></div>
-      <div class="metric-row"><span class="metric-label">Tiêu thụ tải hôm nay</span><span class="metric-val"><span id="valEload">0.0</span> kWh</span></div>
+    <!-- 4. TAB CÀI ĐẶT DONGLE TỪ XA -->
+    <div id="tabCfgDongle" class="tab-content">
+      <form onsubmit="remoteSaveDongle(event)">
+        <div class="card">
+          <div class="card-header"><span class="card-title">🔌 Cài Đặt Dongle Từ Xa Qua MQTT</span></div>
+          <label class="checkbox-row"><input type="checkbox" id="cfgAutoScanDongle"><span>🔄 Tự động quét tìm IP Dongle khi mất kết nối</span></label>
+          <div class="form-grid">
+            <div class="form-group"><label>IP Dongle</label><input type="text" id="cfgDongleIp" required></div>
+            <div class="form-group"><label>Cổng TCP</label><input type="number" id="cfgDonglePort" value="8000" required></div>
+            <div class="form-group"><label>Dongle SN</label><input type="text" id="cfgDongleSn" maxlength="10" required></div>
+            <div class="form-group"><label>Inverter SN</label><input type="text" id="cfgInverterSn" maxlength="10" required></div>
+            <div class="form-group"><label>Chu kỳ đọc (ms)</label><input type="number" id="cfgPollInterval" value="3000" required></div>
+          </div>
+          <div class="btn-row"><button type="submit" class="btn btn-primary">📤 Gửi Cài Đặt Sang ESP32</button></div>
+        </div>
+      </form>
     </div>
-  </div>
 
-  <!-- BẢNG TOÀN BỘ CÁC THÔNG SỐ TỰ ĐỘNG TÁCH TỪ JSON -->
-  <div class="card" style="margin-bottom: 18px;">
-    <div class="card-header">
-      <span class="card-title">🔢 Toàn Bộ Thông Số Tách Ra Từ JSON</span>
-      <span class="badge" id="txtTotalKeys">0 thông số</span>
+    <!-- 5. TAB CÀI ĐẶT MQTT ESP32 TỪ XA -->
+    <div id="tabCfgMqtt" class="tab-content">
+      <form onsubmit="remoteSaveMqtt(event)">
+        <div class="card">
+          <div class="card-header"><span class="card-title">📡 Cài Đặt MQTT Broker Trên ESP32</span></div>
+          <label class="checkbox-row"><input type="checkbox" id="cfgMqttEnable"><span>Bật MQTT trên ESP32</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="cfgMqttAlwaysPush"><span>⚡ Luôn đẩy MQTT mỗi chu kỳ</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="cfgMqttUseTls"><span>🔒 Sử dụng TLS/SSL (8883)</span></label>
+          <div class="form-grid">
+            <div class="form-group"><label>Host</label><input type="text" id="cfgMqttHost"></div>
+            <div class="form-group"><label>Port</label><input type="number" id="cfgMqttPort" value="8883"></div>
+            <div class="form-group"><label>Username</label><input type="text" id="cfgMqttUser"></div>
+            <div class="form-group">
+              <label>Password</label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="cfgMqttPass" style="padding-right:40px;">
+                <button type="button" class="eye-btn" onclick="tglPwd('cfgMqttPass', this)">👁️</button>
+              </div>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Topic cơ sở</label><input type="text" id="cfgMqttTopic" value="luxpower/sna/state"></div>
+          </div>
+          <div class="btn-row"><button type="submit" class="btn btn-primary">📤 Gửi Cài Đặt Sang ESP32</button></div>
+        </div>
+      </form>
     </div>
-    <div class="dynamic-grid" id="dynamicGrid"></div>
-  </div>
 
-  <!-- RAW JSON VIEWER -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">📡 Chuỗi JSON Nhận Thời Gian Thực</span>
-      <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyRawJson()">Sao chép JSON</button>
+    <!-- 6. TAB CÀI ĐẶT WI-FI TỪ XA & REBOOT -->
+    <div id="tabCfgWifi" class="tab-content">
+      <form onsubmit="remoteSaveWifi(event)">
+        <div class="card">
+          <div class="card-header"><span class="card-title">📶 Cài Đặt Wi-Fi ESP32 Từ Xa</span></div>
+          <div class="form-group"><label>Tên Wi-Fi (SSID)</label><input type="text" id="cfgWifiSsid" required></div>
+          <div class="form-group">
+            <label>Mật khẩu Wi-Fi</label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <input type="password" id="cfgWifiPass" style="padding-right:40px;">
+              <button type="button" class="eye-btn" onclick="tglPwd('cfgWifiPass', this)">👁️</button>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary">📤 Gửi Cài Đặt Wi-Fi</button>
+            <button type="button" class="btn btn-danger" onclick="remoteRebootEsp()">🔄 Khởi Động Lại ESP32</button>
+          </div>
+        </div>
+      </form>
     </div>
-    <div class="json-box" id="jsonBox">Đang chờ gói tin JSON đầu tiên từ MQTT...</div>
-  </div>
+
+  </main>
 </div>
 
+<div class="toast" id="toastBox">Đã gửi lệnh!</div>
+
 <script>
-  let client = null;
-  let rawJsonCache = "";
+let client = null;
+let stateTopic = "luxpower/sna/state";
+let cmdTopic = "luxpower/sna/set";
+let lastRxData = null;
 
-  function toggleConfig() {
-    const p = document.getElementById('cfgPanel');
-    p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+const TELE_NAMES = ["online","mqtt_connected","mqtt_tls","wifi_rssi","s3_temp","cpu_mhz","free_heap","psram_free","psram_total","flash_size","uptime_s","ip","poll_interval","poll_ok","poll_err","p_pv_total","p_bat_net","p_load","e_pv_day_total","e_load_day"];
+
+function swTab(id, el) {
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (el) el.classList.add('active');
+  if (window.innerWidth <= 900) closeSbM();
+}
+function tglSbD() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+function openSbM() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sbOv').classList.add('open'); }
+function closeSbM() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sbOv').classList.remove('open'); }
+function tglPwd(id, btn) {
+  const inp = document.getElementById(id);
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁️'; }
+}
+function toast(m, err) {
+  const t = document.getElementById('toastBox');
+  t.textContent = m; t.style.background = err ? '#ef4444' : '#10b981';
+  t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000);
+}
+function fmtN(n, d=0) { if (isNaN(n)) n=0; return Number(n).toLocaleString('vi-VN', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+function flashDot(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+// ============================================================================
+// KHỞI TẠO BẢNG CHỌN THANH GHI VÀ TELEMETRY
+// ============================================================================
+function initGrids() {
+  let ht = '';
+  for (let i = 0; i < TELE_NAMES.length; i++) {
+    ht += `<div class="reg-item tele" data-tele="${i}" onclick="remoteToggleTele(${i})">
+      <div><div class="reg-idx">F${i}</div><div class="reg-name">${TELE_NAMES[i]}</div></div>
+      <div class="reg-toggle"></div></div>`;
   }
+  document.getElementById('teleContainer').innerHTML = ht;
 
-  function loadSavedConfig() {
-    document.getElementById('cfgHost').value = localStorage.getItem('lx_host') || '';
-    document.getElementById('cfgPort').value = localStorage.getItem('lx_port') || '8884';
-    document.getElementById('cfgTopic').value = localStorage.getItem('lx_topic') || 'luxpower/sna/state';
-    document.getElementById('cfgUser').value = localStorage.getItem('lx_user') || '';
-    document.getElementById('cfgPass').value = localStorage.getItem('lx_pass') || '';
-    
-    // Tự động kết nối nếu đã lưu host
-    if (document.getElementById('cfgHost').value.trim() !== '') {
-      connectMqtt();
-    }
+  let hr = '';
+  for (let i = 0; i < 120; i++) {
+    hr += `<div class="reg-item" data-reg="${i}" onclick="remoteToggleReg(${i})">
+      <div><div class="reg-idx">R${i}</div><div class="reg-name">reg_${i}</div></div>
+      <div class="reg-toggle"></div></div>`;
   }
+  document.getElementById('regContainer').innerHTML = hr;
+}
 
-  function connectMqtt(e) {
-    if (e) e.preventDefault();
-    if (client && client.connected) {
-      client.end();
-    }
+// ============================================================================
+// KẾT NỐI MQTT OVER WEBSOCKET (WSS)
+// ============================================================================
+function loadSavedWss() {
+  document.getElementById('wssHost').value = localStorage.getItem('lx_wss_host') || '';
+  document.getElementById('wssPort').value = localStorage.getItem('lx_wss_port') || '8884';
+  document.getElementById('wssTopic').value = localStorage.getItem('lx_wss_topic') || 'luxpower/sna';
+  document.getElementById('wssUser').value = localStorage.getItem('lx_wss_user') || '';
+  document.getElementById('wssPass').value = localStorage.getItem('lx_wss_pass') || '';
+  if (document.getElementById('wssHost').value.trim() !== '') connectWssBroker();
+}
 
-    const host = document.getElementById('cfgHost').value.trim();
-    const port = parseInt(document.getElementById('cfgPort').value) || 8884;
-    const topic = document.getElementById('cfgTopic').value.trim();
-    const user = document.getElementById('cfgUser').value.trim();
-    const pass = document.getElementById('cfgPass').value;
+function connectWssBroker(e) {
+  if (e) e.preventDefault();
+  if (client && client.connected) client.end();
 
-    localStorage.setItem('lx_host', host);
-    localStorage.setItem('lx_port', port);
-    localStorage.setItem('lx_topic', topic);
-    localStorage.setItem('lx_user', user);
-    localStorage.setItem('lx_pass', pass);
+  const host = document.getElementById('wssHost').value.trim();
+  const port = parseInt(document.getElementById('wssPort').value) || 8884;
+  const baseTopic = document.getElementById('wssTopic').value.trim();
+  const user = document.getElementById('wssUser').value.trim();
+  const pass = document.getElementById('wssPass').value;
 
-    const dot = document.getElementById('dotMqtt');
-    const txt = document.getElementById('txtMqttStatus');
-    dot.className = 'dot';
-    txt.textContent = 'Đang kết nối WSS...';
+  localStorage.setItem('lx_wss_host', host);
+  localStorage.setItem('lx_wss_port', port);
+  localStorage.setItem('lx_wss_topic', baseTopic);
+  localStorage.setItem('lx_wss_user', user);
+  localStorage.setItem('lx_wss_pass', pass);
 
-    // GitHub Pages chạy trên HTTPS bắt buộc dùng giao thức WSS
-    const brokerUrl = `wss://${host}:${port}/mqtt`;
+  stateTopic = baseTopic + "/state";
+  cmdTopic = baseTopic + "/set";
 
-    const options = {
-      clientId: 'WebDash-' + Math.random().toString(16).substr(2, 8),
-      clean: true,
-      connectTimeout: 8000
-    };
-    if (user) options.username = user;
-    if (pass) options.password = pass;
+  const dot = document.getElementById('dotMqtt');
+  const txt = document.getElementById('txtMqttStatus');
+  dot.className = 'dot';
+  txt.textContent = 'MQTT: KẾT NỐI...';
 
-    try {
-      client = mqtt.connect(brokerUrl, options);
+  const wssUrl = `wss://${host}:${port}/mqtt`;
+  const options = {
+    clientId: 'WebCloud-' + Math.random().toString(16).substr(2, 8),
+    clean: true,
+    connectTimeout: 8000
+  };
+  if (user) options.username = user;
+  if (pass) options.password = pass;
 
-      client.on('connect', () => {
-        dot.className = 'dot ok';
-        txt.textContent = 'Đã kết nối';
-        client.subscribe(topic);
-        document.getElementById('cfgPanel').style.display = 'none'; // Thu gọn bảng cài đặt
-      });
+  try {
+    client = mqtt.connect(wssUrl, options);
 
-      client.on('message', (t, payload) => {
+    client.on('connect', () => {
+      dot.className = 'dot ok';
+      txt.textContent = 'MQTT: ON';
+      client.subscribe(stateTopic);
+      toast('Đã kết nối Broker WSS thành công!');
+    });
+
+    client.on('message', (t, payload) => {
+      if (t === stateTopic) {
         try {
-          const str = payload.toString();
-          rawJsonCache = str;
-          const data = JSON.parse(str);
-          renderDashboard(data);
-        } catch (err) {
-          console.error('Lỗi cú pháp JSON nhận được:', err);
-        }
-      });
+          const d = JSON.parse(payload.toString());
+          renderIncomingData(d);
+          flashDot(dot);
+        } catch(err) {}
+      }
+    });
 
-      client.on('error', (err) => {
-        dot.className = 'dot err';
-        txt.textContent = 'Lỗi kết nối';
-        console.error('MQTT WSS Error:', err);
-      });
-
-      client.on('close', () => {
-        dot.className = 'dot err';
-        txt.textContent = 'Mất kết nối';
-      });
-    } catch (err) {
+    client.on('close', () => {
       dot.className = 'dot err';
-      txt.textContent = 'Lỗi khởi tạo';
-    }
+      txt.textContent = 'MQTT: MẤT KẾT NỐI';
+    });
+  } catch(err) {
+    dot.className = 'dot err';
+    txt.textContent = 'MQTT: LỖI';
   }
+}
 
-  function disconnectMqtt() {
-    if (client) {
-      client.end();
-      document.getElementById('dotMqtt').className = 'dot';
-      document.getElementById('txtMqttStatus').textContent = 'Đã ngắt';
-    }
+function disconnectWssBroker() {
+  if (client) {
+    client.end();
+    document.getElementById('dotMqtt').className = 'dot';
+    document.getElementById('txtMqttStatus').textContent = 'MQTT: OFF';
+    toast('Đã ngắt kết nối WSS');
   }
+}
 
-  function renderDashboard(d) {
-    document.getElementById('txtLastTime').textContent = new Date().toLocaleTimeString('vi-VN');
+// ============================================================================
+// HIỂN THỊ DỮ LIỆU TỪ ESP32 ĐẨY LÊN
+// ============================================================================
+function renderIncomingData(d) {
+  lastRxData = d;
+  const di = document.getElementById('dotInv'), ti = document.getElementById('txtInvStatus');
+  if (d.online) { di.className = 'dot ok'; ti.textContent = 'INV: ON'; flashDot(di); }
+  else { di.className = 'dot err'; ti.textContent = 'INV: OFF'; }
 
-    // 1. Cập nhật thẻ Solar
-    if (d.p_pv_total !== undefined) document.getElementById('valPvTotal').textContent = d.p_pv_total;
-    if (d.p_pv1 !== undefined) document.getElementById('valPv1P').textContent = d.p_pv1;
-    if (d.v_pv1 !== undefined) document.getElementById('valPv1V').textContent = Number(d.v_pv1).toFixed(1);
-    if (d.p_pv2 !== undefined) document.getElementById('valPv2P').textContent = d.p_pv2;
-    if (d.v_pv2 !== undefined) document.getElementById('valPv2V').textContent = Number(d.v_pv2).toFixed(1);
-    if (d.v_bus1 !== undefined) document.getElementById('valBus1').textContent = Number(d.v_bus1).toFixed(1);
-    if (d.v_bus2 !== undefined) document.getElementById('valBus2').textContent = Number(d.v_bus2).toFixed(1);
-    if (d.e_pv_day_total !== undefined) document.getElementById('valEpvDay').textContent = Number(d.e_pv_day_total).toFixed(1) + ' kWh';
+  document.getElementById('txtS3Temp').textContent = d.s3_temp !== undefined ? d.s3_temp.toFixed(1) : '--';
+  document.getElementById('txtRssi').textContent = d.wifi_rssi !== undefined ? d.wifi_rssi : '--';
 
-    // 2. Cập nhật thẻ Battery
-    if (d.soc !== undefined) {
-      document.getElementById('valSoc').textContent = d.soc;
-      document.getElementById('barSoc').style.width = Math.min(100, Math.max(0, d.soc)) + '%';
-    }
-    if (d.soh !== undefined) document.getElementById('valSoh').textContent = d.soh;
-    if (d.v_bat !== undefined) document.getElementById('valVbat').textContent = Number(d.v_bat).toFixed(1);
-    if (d.p_charge !== undefined) document.getElementById('valPchg').textContent = d.p_charge;
-    if (d.p_discharge !== undefined) document.getElementById('valPdis').textContent = d.p_discharge;
-    if (d.bms_max_chg_curr !== undefined) document.getElementById('valBmsMaxChg').textContent = Number(d.bms_max_chg_curr).toFixed(0);
-    if (d.bms_max_dischg_curr !== undefined) document.getElementById('valBmsMaxDis').textContent = Number(d.bms_max_dischg_curr).toFixed(0);
-    if (d.e_chg_day !== undefined) document.getElementById('valEchg').textContent = Number(d.e_chg_day).toFixed(1);
-    if (d.e_dischg_day !== undefined) document.getElementById('valEdis').textContent = Number(d.e_dischg_day).toFixed(1);
+  // Solar
+  document.getElementById('valPvTotal').textContent = fmtN(d.p_pv_total);
+  document.getElementById('valPv1P').textContent = fmtN(d.p_pv1);
+  document.getElementById('valPv2P').textContent = fmtN(d.p_pv2);
+  document.getElementById('valPv1V').textContent = (d.v_pv1 || 0).toFixed(1) + ' V';
+  document.getElementById('valPv2V').textContent = (d.v_pv2 || 0).toFixed(1) + ' V';
+  document.getElementById('valEpvDay').textContent = (d.e_pv_day_total || 0).toFixed(1) + ' kWh';
+  document.getElementById('tagPvDay').textContent = (d.e_pv_day_total || 0).toFixed(1) + ' kWh';
 
-    const badgeBat = document.getElementById('badgeBatState');
-    if (d.p_charge > 10) badgeBat.textContent = '⚡ Đang sạc';
-    else if (d.p_discharge > 10) badgeBat.textContent = '🔋 Đang xả';
-    else badgeBat.textContent = 'Standby';
+  const ipv1 = (d.v_pv1 > 15 && d.p_pv1 > 0) ? (d.p_pv1 / d.v_pv1) : 0;
+  const ipv2 = (d.v_pv2 > 15 && d.p_pv2 > 0) ? (d.p_pv2 / d.v_pv2) : 0;
+  document.getElementById('valPv1I').textContent = ipv1.toFixed(1) + ' A';
+  document.getElementById('valPv2I').textContent = ipv2.toFixed(1) + ' A';
 
-    // 3. Cập nhật thẻ Grid
-    const pToUser = d.p_to_user || 0;
-    const pToGrid = d.p_to_grid || 0;
-    document.getElementById('valPgridNet').textContent = pToUser - pToGrid;
-    if (d.v_grid !== undefined) document.getElementById('valVgrid').textContent = Number(d.v_grid).toFixed(1);
-    if (d.f_grid !== undefined) document.getElementById('valFgrid').textContent = Number(d.f_grid).toFixed(2);
-    document.getElementById('valPtoUser').textContent = pToUser;
-    document.getElementById('valPtoGrid').textContent = pToGrid;
-    if (d.e_to_user_day !== undefined) document.getElementById('valEtoUser').textContent = Number(d.e_to_user_day).toFixed(1);
-    if (d.e_to_grid_day !== undefined) document.getElementById('valEtoGrid').textContent = Number(d.e_to_grid_day).toFixed(1);
+  // Battery
+  document.getElementById('valSoc').textContent = d.soc || 0;
+  document.getElementById('barSoc').style.width = Math.min(100, Math.max(0, d.soc || 0)) + '%';
+  document.getElementById('valVbat').textContent = (d.v_bat || 0).toFixed(1);
+  document.getElementById('valTbat').textContent = d.t_bat !== undefined ? d.t_bat : 0;
+  document.getElementById('valPchg').textContent = fmtN(d.p_charge) + ' W';
+  document.getElementById('valPdis').textContent = fmtN(d.p_discharge) + ' W';
+  document.getElementById('valEchg').textContent = (d.e_chg_day || 0).toFixed(1);
+  document.getElementById('valEdis').textContent = (d.e_dischg_day || 0).toFixed(1);
 
-    const badgeGrid = document.getElementById('badgeGridState');
-    if (d.v_grid < 150) badgeGrid.textContent = '⚠️ Mất lưới';
-    else if (pToGrid > 10) badgeGrid.textContent = '📤 Bán lưới';
-    else if (pToUser > 10) badgeGrid.textContent = '📥 Mua lưới';
-    else badgeGrid.textContent = 'Ổn định';
-
-    // 4. Cập nhật Load & Nhiệt độ
-    if (d.status !== undefined) document.getElementById('valStatus').textContent = d.status;
-    if (d.p_load !== undefined) document.getElementById('valPload').textContent = d.p_load;
-    if (d.p_eps !== undefined) document.getElementById('valPeps').textContent = d.p_eps;
-    if (d.v_eps !== undefined) document.getElementById('valVeps').textContent = Number(d.v_eps).toFixed(1);
-    if (d.t_inner !== undefined) document.getElementById('valTinner').textContent = d.t_inner;
-    if (d.t_rad1 !== undefined) document.getElementById('valTrad1').textContent = d.t_rad1;
-    if (d.t_rad2 !== undefined) document.getElementById('valTrad2').textContent = d.t_rad2;
-    if (d.s3_temp !== undefined) document.getElementById('valS3Temp').textContent = Number(d.s3_temp).toFixed(1);
-    if (d.wifi_rssi !== undefined) document.getElementById('valRssi').textContent = d.wifi_rssi;
-    if (d.e_load_day !== undefined) document.getElementById('valEload').textContent = Number(d.e_load_day).toFixed(1);
-
-    // 5. Hiển thị toàn bộ các khóa/giá trị tự động
-    const grid = document.getElementById('dynamicGrid');
-    let html = '';
-    let count = 0;
-    for (const [k, v] of Object.entries(d)) {
-      if (k === 'regs') continue; // bỏ qua mảng raw nếu quá dài
-      html += `<div class="dynamic-item">
-        <span class="dynamic-key" title="${k}">${k}</span>
-        <div class="dynamic-val">${v}</div>
-      </div>`;
-      count++;
-    }
-    grid.innerHTML = html;
-    document.getElementById('txtTotalKeys').textContent = count + ' thông số';
-
-    // 6. Cập nhật hộp JSON thô có căn thụt dòng
-    document.getElementById('jsonBox').textContent = JSON.stringify(d, null, 2);
+  let ibat = 0;
+  if (d.v_bat > 20) {
+    if (d.p_charge > 5) ibat = d.p_charge / d.v_bat;
+    else if (d.p_discharge > 5) ibat = -(d.p_discharge / d.v_bat);
   }
+  const elIb = document.getElementById('valIbat');
+  elIb.textContent = (ibat > 0 ? '+' : '') + ibat.toFixed(1) + ' A';
+  elIb.style.color = ibat > 0 ? '#34d399' : (ibat < 0 ? '#fbbf24' : '#f8fafc');
 
-  function copyRawJson() {
-    if (!rawJsonCache) return;
-    navigator.clipboard.writeText(rawJsonCache);
-    alert('Đã sao chép chuỗi JSON vào bộ nhớ tạm!');
+  // Grid
+  const gn = (d.p_to_user || 0) - (d.p_to_grid || 0);
+  document.getElementById('valPgridNet').textContent = fmtN(gn);
+  document.getElementById('valVgrid').textContent = (d.v_grid || 0).toFixed(1);
+  document.getElementById('valFgrid').textContent = (d.f_grid || 0).toFixed(2) + ' Hz';
+  document.getElementById('valPtoUser').textContent = fmtN(d.p_to_user) + ' W';
+  document.getElementById('valPtoGrid').textContent = fmtN(d.p_to_grid) + ' W';
+
+  const vg = d.v_grid > 50 ? d.v_grid : 220;
+  document.getElementById('valItoUser').textContent = ((d.p_to_user || 0) / vg).toFixed(1) + ' A';
+  document.getElementById('valItoGrid').textContent = ((d.p_to_grid || 0) / vg).toFixed(1) + ' A';
+  document.getElementById('valIgridNet').textContent = (gn / vg).toFixed(1) + ' A';
+
+  // Load
+  document.getElementById('valPload').textContent = fmtN(d.p_load);
+  document.getElementById('valPeps').textContent = fmtN(d.p_eps);
+  document.getElementById('valPinv').textContent = fmtN(d.p_inv) + ' W';
+  document.getElementById('valTinner').textContent = (d.t_inner || 0) + '°C';
+  document.getElementById('valEload').textContent = (d.e_load_day || 0).toFixed(1) + ' kWh';
+  document.getElementById('valIload').textContent = ((d.p_load || 0) / vg).toFixed(1);
+
+  // Đồng bộ trạng thái cờ bật/tắt Regs & Tele nếu có trong payload
+  if (Array.isArray(d.regs_enabled)) {
+    d.regs_enabled.forEach((en, i) => {
+      const el = document.querySelector(`.reg-item[data-reg="${i}"]`);
+      if (el) el.classList.toggle('on', !!en);
+    });
   }
+  if (Array.isArray(d.tele_enabled)) {
+    d.tele_enabled.forEach((en, i) => {
+      const el = document.querySelector(`.reg-item[data-tele="${i}"]`);
+      if (el) el.classList.toggle('on', !!en);
+    });
+  }
+}
 
-  loadSavedConfig();
+// ============================================================================
+// HÀM GỬI LỆNH CÀI ĐẶT NGƯỢC XUỐNG ESP32 QUA TOPIC `<baseTopic>/set`
+// ============================================================================
+function publishMqttCommand(payload) {
+  if (!client || !client.connected) {
+    toast('Chưa kết nối WSS Broker!', true);
+    return;
+  }
+  const jsonStr = JSON.stringify(payload);
+  client.publish(cmdTopic, jsonStr, { qos: 1 });
+  toast('Đã gửi lệnh xuống ESP32!');
+}
+
+function remoteSaveDongle(e) {
+  e.preventDefault();
+  publishMqttCommand({
+    cmd: "set_dongle",
+    autoScanDongle: document.getElementById('cfgAutoScanDongle').checked,
+    dongleIp: document.getElementById('cfgDongleIp').value.trim(),
+    donglePort: parseInt(document.getElementById('cfgDonglePort').value) || 8000,
+    dongleSn: document.getElementById('cfgDongleSn').value.trim(),
+    inverterSn: document.getElementById('cfgInverterSn').value.trim(),
+    pollInterval: parseInt(document.getElementById('cfgPollInterval').value) || 3000
+  });
+}
+
+function remoteSaveMqtt(e) {
+  e.preventDefault();
+  publishMqttCommand({
+    cmd: "set_mqtt",
+    mqttEnable: document.getElementById('cfgMqttEnable').checked,
+    mqttAlwaysPush: document.getElementById('cfgMqttAlwaysPush').checked,
+    mqttUseTls: document.getElementById('cfgMqttUseTls').checked,
+    mqttHost: document.getElementById('cfgMqttHost').value.trim(),
+    mqttPort: parseInt(document.getElementById('cfgMqttPort').value) || 8883,
+    mqttUser: document.getElementById('cfgMqttUser').value.trim(),
+    mqttPass: document.getElementById('cfgMqttPass').value,
+    mqttTopic: document.getElementById('cfgMqttTopic').value.trim()
+  });
+}
+
+function remoteSaveWifi(e) {
+  e.preventDefault();
+  publishMqttCommand({
+    cmd: "set_wifi",
+    wifiSsid: document.getElementById('cfgWifiSsid').value.trim(),
+    wifiPass: document.getElementById('cfgWifiPass').value
+  });
+}
+
+function remoteToggleReg(i) {
+  const el = document.querySelector(`.reg-item[data-reg="${i}"]`);
+  const en = !el.classList.contains('on');
+  el.classList.toggle('on', en);
+  publishMqttCommand({ cmd: "toggle_reg", i: i, e: en });
+}
+
+function remoteToggleAllRegs(en) {
+  document.querySelectorAll('.reg-item[data-reg]').forEach(el => el.classList.toggle('on', en));
+  publishMqttCommand({ cmd: "toggle_all_regs", e: en });
+}
+
+function remoteToggleTele(i) {
+  const el = document.querySelector(`.reg-item[data-tele="${i}"]`);
+  const en = !el.classList.contains('on');
+  el.classList.toggle('on', en);
+  publishMqttCommand({ cmd: "toggle_tele", i: i, e: en });
+}
+
+function remoteToggleAllTele(en) {
+  document.querySelectorAll('.reg-item[data-tele]').forEach(el => el.classList.toggle('on', en));
+  publishMqttCommand({ cmd: "toggle_all_tele", e: en });
+}
+
+function remoteRebootEsp() {
+  if (!confirm('Khởi động lại ESP32 từ xa qua MQTT?')) return;
+  publishMqttCommand({ cmd: "reboot" });
+}
+
+initGrids();
+loadSavedWss();
 </script>
 </body>
 </html>
