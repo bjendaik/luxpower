@@ -27,14 +27,6 @@
     }
     .device-selector:focus { border-color: var(--accent); }
 
-    .chip-mac {
-      background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);
-      font-size: 0.68rem; padding: 2px 7px; border-radius: 6px; font-weight: 700;
-      font-family: 'Consolas', monospace; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-    }
-    .chip-mac:hover { background: rgba(56, 189, 248, 0.28); }
-    .chip-mac.copied { background: rgba(16, 185, 129, 0.25); color: #34d399; }
-
     .status-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .badge {
       padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600;
@@ -206,7 +198,7 @@
     <button class="sb-tgl m" onclick="openSbM()">☰</button>
     <div class="brand">⚡ LUXPOWER <span class="hl">SNA</span></div>
     <select id="selDevice" class="device-selector" onchange="onDeviceSelected(this.value)">
-      <option value="">⏳ Đang đợi thiết bị gửi dữ liệu...</option>
+      <option value="">⏳ Đợi thiết bị...</option>
     </select>
   </div>
   <div class="status-bar">
@@ -488,21 +480,6 @@ function toast(m, err) {
 function fmtN(n, d=0) { if (isNaN(n)) n=0; return Number(n).toLocaleString('vi-VN', {minimumFractionDigits:d, maximumFractionDigits:d}); }
 function flashDot(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
 
-function copyHeaderMac() {
-  if (!selectedMac) { toast('Chưa chọn trạm nào!', true); return; }
-  navigator.clipboard.writeText(selectedMac).then(() => {
-    const el = document.getElementById('txtHeaderMac');
-    const oldTxt = el.textContent;
-    el.classList.add('copied');
-    el.textContent = '✅ Đã copy!';
-    toast('Đã copy MAC: ' + selectedMac);
-    setTimeout(() => {
-      el.classList.remove('copied');
-      el.textContent = oldTxt;
-    }, 1200);
-  });
-}
-
 function initGrids() {
   let ht = '';
   for (let i = 0; i < TELE_NAMES.length; i++) {
@@ -633,8 +610,7 @@ function handleIncomingMqttMessage(t, payload) {
       if (Object.keys(discoveredDevices).length === 1) sel.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = mac;
-      // CHỈ HIỂN THỊ TÊN THIẾT BỊ TRÊN THANH BAR
-      opt.textContent = `${devName}`;
+      opt.textContent = `📍 ${devName}`;
       sel.appendChild(opt);
 
       if (!selectedMac) {
@@ -644,7 +620,7 @@ function handleIncomingMqttMessage(t, payload) {
     } else {
       for (let i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value === mac) {
-          sel.options[i].textContent = `${devName}`;
+          sel.options[i].textContent = `📍 ${devName}`;
           break;
         }
       }
@@ -687,8 +663,6 @@ function renderIncomingData(d) {
   updateOtaInfo(d);
 
   const mac = d.mac || selectedMac;
-  const hMac = document.getElementById('txtHeaderMac');
-  if (hMac) hMac.textContent = "MAC: " + mac;
   const sbMac = document.getElementById('txtSidebarMac');
   if (sbMac) sbMac.textContent = mac;
 
