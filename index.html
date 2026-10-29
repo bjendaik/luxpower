@@ -644,7 +644,7 @@ function handleIncomingMqttMessage(t, payload) {
     } else {
       for (let i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value === mac) {
-          sel.options[i].textContent = `📍 ${devName}`;
+          sel.options[i].textContent = `${devName}`;
           break;
         }
       }
