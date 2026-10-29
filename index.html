@@ -6,132 +6,316 @@
   <title>LuxPower SNA - Cloud Dashboard</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    :root { --bg:#0b1120; --card:#151f32; --border:#263554; --text:#e2e8f0; --muted:#94a3b8;
-            --accent:#38bdf8; --solar:#f59e0b; --bat:#10b981; --grid:#a855f7; --load:#3b82f6; --danger:#ef4444; }
-    * { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',system-ui,sans-serif; }
-    body { background:var(--bg); color:var(--text); min-height:100vh; }
-    header { background:linear-gradient(135deg,#0f172a,#1e293b); border-bottom:1px solid var(--border);
-             padding:10px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;
-             position:sticky; top:0; z-index:100; min-height:60px; flex-wrap:wrap; }
-    .brand { display:flex; align-items:center; gap:10px; font-size:1.1rem; font-weight:800; color:#fff; }
-    .brand span.hl { color:var(--solar); }
-    .chip-tag { background:rgba(56,189,248,.15); color:var(--accent); border:1px solid rgba(56,189,248,.3);
-                font-size:.7rem; padding:2px 7px; border-radius:6px; font-weight:700; }
-    .status-bar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-    .badge { padding:4px 10px; border-radius:999px; font-size:.74rem; font-weight:600;
-             display:inline-flex; align-items:center; gap:5px; background:#1e293b; border:1px solid var(--border); }
-    
-    .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background 0.2s; }
-    .dot.ok { background:#10b981; box-shadow:0 0 6px #10b981; }
-    .dot.err { background:#ef4444; box-shadow:0 0 6px #ef4444; }
-    
-    @keyframes flashDotAnim {
-      0% { background:#34d399; box-shadow:0 0 16px 4px #34d399; transform:scale(1.6); }
-      50% { background:#a7f3d0; box-shadow:0 0 22px 6px #34d399; transform:scale(1.8); }
-      100% { background:#10b981; box-shadow:0 0 6px #10b981; transform:scale(1); }
+    :root {
+      --bg: #0b1120;
+      --card: #151f32;
+      --border: #263554;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --solar: #f59e0b;
+      --bat: #10b981;
+      --grid: #a855f7;
+      --load: #3b82f6;
+      --danger: #ef4444;
     }
-    .dot.flash { animation:flashDotAnim 0.5s ease-out; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+    header {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      min-height: 60px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 800; color: #fff; }
+    .brand span.hl { color: var(--solar); }
+    .chip-tag {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #1e293b;
+      border: 1px solid var(--border);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.2s; }
+    .dot.ok { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .dot.err { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
 
-    .sb-tgl { display:none; background:#1e293b; border:1px solid var(--border); color:var(--text);
-              font-size:1.15rem; width:38px; height:38px; border-radius:10px; cursor:pointer;
-              align-items:center; justify-content:center; flex-shrink:0; }
-    @media (min-width:901px) { .sb-tgl.d { display:inline-flex; } }
-    @media (max-width:900px) { .sb-tgl.m { display:inline-flex; } }
-    .layout { display:flex; min-height:calc(100vh - 60px); }
-    .sidebar { width:240px; flex-shrink:0; background:#0f172a; border-right:1px solid var(--border);
-               padding:16px 12px; position:sticky; top:60px; height:calc(100vh - 60px);
-               overflow-y:auto; transition:width .25s, transform .25s; }
-    .sidebar.collapsed { width:64px; padding:16px 8px; }
-    .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-title, .sidebar.collapsed .sidebar-footer { display:none; }
-    .sidebar.collapsed .nav-item { justify-content:center; padding:12px 0; }
-    .sidebar-title { font-size:.68rem; text-transform:uppercase; color:var(--muted); font-weight:700;
-                     letter-spacing:.6px; padding:0 8px 6px; border-bottom:1px solid var(--border); margin-bottom:6px; }
-    .nav-item { display:flex; align-items:center; gap:12px; padding:12px 14px; margin-bottom:4px;
-                border-radius:10px; cursor:pointer; color:var(--muted); font-weight:600; font-size:.9rem;
-                transition:all .15s; border:1px solid transparent; white-space:nowrap; overflow:hidden; }
-    .nav-item:hover { background:#1e293b; color:var(--text); }
-    .nav-item.active { background:var(--accent); color:#0f172a; border-color:var(--accent); }
-    .nav-icon { font-size:1.1rem; flex-shrink:0; width:22px; text-align:center; }
-    .nav-label { flex:1; overflow:hidden; text-overflow:ellipsis; }
-    .sidebar-footer { margin-top:16px; padding:10px 8px; font-size:.72rem; color:var(--muted);
-                      border-top:1px solid var(--border); line-height:1.6; }
-    .main { flex:1; min-width:0; padding:18px; }
-    .sb-ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:150; }
-    .sb-ov.open { display:block; }
-    @media (max-width:900px) {
-      .sidebar { position:fixed; top:0; left:0; height:100vh; z-index:200; transform:translateX(-100%);
-                 width:260px; box-shadow:4px 0 20px rgba(0,0,0,.5); padding:16px 12px; }
-      .sidebar.open { transform:translateX(0); }
-      .sidebar.collapsed { width:260px; padding:16px 12px; }
-      .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-title, .sidebar.collapsed .sidebar-footer { display:block; }
-      .sidebar.collapsed .nav-item { justify-content:flex-start; padding:12px 14px; }
-      .main { padding:12px; }
+    @keyframes flashDotAnim {
+      0% { background: #34d399; box-shadow: 0 0 16px 4px #34d399; transform: scale(1.6); }
+      50% { background: #a7f3d0; box-shadow: 0 0 22px 6px #34d399; transform: scale(1.8); }
+      100% { background: #10b981; box-shadow: 0 0 6px #10b981; transform: scale(1); }
     }
-    .power-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:16px; }
-    @media (min-width:1100px) { .power-grid { grid-template-columns:repeat(4,1fr); } }
-    @media (max-width:600px) { .power-grid { grid-template-columns:1fr; } }
-    .power-card { background:var(--card); border:1px solid var(--border); border-radius:16px;
-                  padding:18px 16px; position:relative; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,.25); }
-    .power-card::before { content:""; position:absolute; top:0; left:0; width:100%; height:5px; }
-    .power-card.pv::before { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
-    .power-card.bat::before { background:linear-gradient(90deg,#10b981,#34d399); }
-    .power-card.grid::before { background:linear-gradient(90deg,#a855f7,#c084fc); }
-    .power-card.load::before { background:linear-gradient(90deg,#3b82f6,#60a5fa); }
-    .pc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:6px; }
-    .pc-title { display:flex; align-items:center; gap:8px; font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
-    .pc-icon { font-size:1.3rem; }
-    .pc-tag { font-size:.7rem; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.08); color:var(--muted); }
-    .pc-value { font-size:2.1rem; font-weight:800; color:#fff; line-height:1; margin-bottom:4px; }
-    .pc-value small { font-size:.95rem; font-weight:600; color:var(--muted); }
-    .pc-sub { font-size:.78rem; color:var(--muted); margin-bottom:12px; line-height:1.45; }
-    .pc-sub strong { color:var(--text); }
-    .pc-rows { border-top:1px dashed rgba(255,255,255,.08); padding-top:8px; }
-    .pc-row { display:flex; justify-content:space-between; font-size:.79rem; padding:3.5px 0; gap:8px; }
-    .pc-row span:first-child { color:var(--muted); }
-    .pc-row span:last-child { font-weight:600; color:#f8fafc; text-align:right; }
-    .soc-bar { height:10px; background:#0f172a; border-radius:999px; overflow:hidden; margin:8px 0 10px; border:1px solid var(--border); }
-    .soc-fill { height:100%; background:linear-gradient(90deg,#059669,#34d399); transition:width .4s; }
-    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
-    .stat-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
-    .stat-label { font-size:.72rem; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:.4px; margin-bottom:6px; }
-    .stat-val { font-size:1.35rem; font-weight:800; color:#fff; }
-    .stat-val small { font-size:.8rem; color:var(--muted); font-weight:600; }
-    .chart-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; }
-    .chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
-    .chart-title { font-size:.9rem; font-weight:700; }
-    .chart-wrap { position:relative; width:100%; height:260px; }
-    .chart-svg { width:100%; height:100%; display:block; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px;
-            box-shadow:0 8px 20px rgba(0,0,0,.25); position:relative; overflow:hidden; }
-    .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap; }
-    .card-title { font-size:.85rem; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; }
-    .form-group { margin-bottom:14px; }
-    .form-group label { display:block; margin-bottom:6px; font-size:.85rem; color:var(--muted); font-weight:600; }
-    .form-group input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
-                        background:#0b1120; color:#fff; font-size:.92rem; outline:none; }
-    .btn-row { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; align-items:center; }
-    .btn { padding:10px 20px; border-radius:10px; border:none; font-weight:700; font-size:.9rem; cursor:pointer; }
-    .btn-primary { background:var(--accent); color:#0f172a; }
-    .btn-danger { background:var(--danger); color:#fff; }
-    .btn-secondary { background:#334155; color:#fff; }
-    .reg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
-    .reg-item { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:8px 10px;
-                display:flex; justify-content:space-between; align-items:center; gap:8px;
-                font-size:.82rem; cursor:pointer; user-select:none; transition:all .15s; }
-    .reg-item:hover { background:#16233b; }
-    .reg-item.on { border-color:#10b981; background:rgba(16,185,129,.08); }
-    .reg-item.tele { border-left:3px solid #38bdf8; }
-    .reg-idx { color:var(--muted); font-weight:600; font-size:.7rem; }
-    .reg-name { color:#cbd5e1; font-weight:600; font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .reg-val { color:var(--accent); font-family:monospace; font-weight:700; }
-    .reg-toggle { width:32px; height:18px; background:#334155; border-radius:999px; position:relative; flex-shrink:0; transition:background .2s; }
-    .reg-toggle::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; background:#94a3b8; border-radius:50%; transition:all .2s; }
-    .reg-item.on .reg-toggle { background:#10b981; }
-    .reg-item.on .reg-toggle::after { left:16px; background:#fff; }
-    .tab-content { display:none; }
-    .tab-content.active { display:block; }
-    .toast { position:fixed; bottom:20px; right:20px; background:#10b981; color:#06281e; padding:12px 20px; border-radius:10px; font-weight:700; display:none; z-index:300; }
-    .eye-btn { position:absolute; right:8px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; padding:4px; }
+    .dot.flash { animation: flashDotAnim 0.5s ease-out; }
+
+    .sb-tgl {
+      display: none;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 1.15rem;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    @media (min-width: 901px) { .sb-tgl.d { display: inline-flex; } }
+    @media (max-width: 900px) { .sb-tgl.m { display: inline-flex; } }
+
+    .layout { display: flex; min-height: calc(100vh - 60px); }
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: #0f172a;
+      border-right: 1px solid var(--border);
+      padding: 16px 12px;
+      position: sticky;
+      top: 60px;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+      transition: width 0.25s, transform 0.25s;
+    }
+    .sidebar.collapsed { width: 64px; padding: 16px 8px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-footer { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 12px 0; }
+    .sidebar-title {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      padding: 0 8px 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin-bottom: 4px;
+      border-radius: 10px;
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .nav-item:hover { background: #1e293b; color: var(--text); }
+    .nav-item.active { background: var(--accent); color: #0f172a; border-color: var(--accent); font-weight: 700; }
+    .nav-icon { font-size: 1.1rem; flex-shrink: 0; width: 22px; text-align: center; }
+    .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-footer {
+      margin-top: 16px;
+      padding: 10px 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .main { flex: 1; min-width: 0; padding: 18px; }
+    .sb-ov { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 150; }
+    .sb-ov.open { display: block; }
+    @media (max-width: 900px) {
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 200;
+        transform: translateX(-100%);
+        width: 260px;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        padding: 16px 12px;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar.collapsed { width: 260px; padding: 16px 12px; }
+      .sidebar.collapsed .nav-label,
+      .sidebar.collapsed .sidebar-title,
+      .sidebar.collapsed .sidebar-footer { display: block; }
+      .sidebar.collapsed .nav-item { justify-content: flex-start; padding: 12px 14px; }
+      .main { padding: 12px; }
+    }
+
+    .power-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px; }
+    @media (min-width: 1100px) { .power-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 600px) { .power-grid { grid-template-columns: 1fr; } }
+    .power-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    }
+    .power-card::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 5px; }
+    .power-card.pv::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .power-card.bat::before { background: linear-gradient(90deg, #10b981, #34d399); }
+    .power-card.grid::before { background: linear-gradient(90deg, #a855f7, #c084fc); }
+    .power-card.load::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .pc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 6px; }
+    .pc-title { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pc-icon { font-size: 1.3rem; }
+    .pc-tag { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+    .pc-value { font-size: 2.1rem; font-weight: 800; color: #fff; line-height: 1; margin-bottom: 4px; }
+    .pc-value small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+    .pc-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.45; }
+    .pc-sub strong { color: var(--text); }
+    .pc-rows { border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 8px; }
+    .pc-row { display: flex; justify-content: space-between; font-size: 0.79rem; padding: 3.5px 0; gap: 8px; }
+    .pc-row span:first-child { color: var(--muted); }
+    .pc-row span:last-child { font-weight: 600; color: #f8fafc; text-align: right; }
+    .soc-bar { height: 10px; background: #0f172a; border-radius: 999px; overflow: hidden; margin: 8px 0 10px; border: 1px solid var(--border); }
+    .soc-fill { height: 100%; background: linear-gradient(90deg, #059669, #34d399); transition: width 0.4s; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .stat-label { font-size: 0.72rem; text-transform: uppercase; color: var(--muted); font-weight: 700; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .stat-val { font-size: 1.35rem; font-weight: 800; color: #fff; }
+    .stat-val small { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .stat-box.pv .stat-val { color: var(--solar); }
+    .stat-box.bat .stat-val { color: var(--bat); }
+    .stat-box.grid .stat-val { color: var(--grid); }
+    .stat-box.load .stat-val { color: var(--load); }
+
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+    .chart-title { font-size: 0.9rem; font-weight: 700; }
+    .chart-wrap { position: relative; width: 100%; height: 260px; }
+    .chart-svg { width: 100%; height: 100%; display: block; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .card-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0b1120;
+      color: #fff;
+      font-size: 0.92rem;
+      outline: none;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .btn-row { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+    .btn { padding: 10px 20px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover:not(:disabled) { opacity: 0.9; }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: #334155; color: #fff; }
+
+    .reg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+    .reg-item {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .reg-item:hover { background: #16233b; }
+    .reg-item.on { border-color: #10b981; background: rgba(16, 185, 129, 0.08); }
+    .reg-item.tele { border-left: 3px solid #38bdf8; }
+    .reg-idx { color: var(--muted); font-weight: 600; font-size: 0.7rem; }
+    .reg-name { color: #cbd5e1; font-weight: 600; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reg-val { color: var(--accent); font-family: monospace; font-weight: 700; }
+    .reg-toggle {
+      width: 32px;
+      height: 18px;
+      background: #334155;
+      border-radius: 999px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .reg-toggle::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background: #94a3b8;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+    .reg-item.on .reg-toggle { background: #10b981; }
+    .reg-item.on .reg-toggle::after { left: 16px; background: #fff; }
+
+    .eye-btn {
+      position: absolute;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+      user-select: none;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #10b981;
+      color: #06281e;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      display: none;
+      z-index: 300;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -140,7 +324,10 @@
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="sb-tgl d" onclick="tglSbD()">☰</button>
     <button class="sb-tgl m" onclick="openSbM()">☰</button>
-    <div class="brand">⚡ LUXPOWER <span class="hl">SNA</span> <span class="chip-tag">GitHub Pages WSS</span></div>
+    <div class="brand">
+      ⚡ LUXPOWER <span class="hl">SNA</span>
+      <span class="chip-tag" id="txtDeviceName">Chờ thiết bị...</span>
+    </div>
   </div>
   <div class="status-bar">
     <div class="badge"><span class="dot" id="dotInv"></span><span id="txtInvStatus">INV: OFF</span></div>
@@ -155,23 +342,37 @@
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-title">Giám sát</div>
-    <div class="nav-item active" data-tab="tabMonitor" onclick="swTab('tabMonitor',this)"><span class="nav-icon">📊</span><span class="nav-label">Theo Dõi Biến Tần</span></div>
+    <div class="nav-item active" data-tab="tabMonitor" onclick="swTab('tabMonitor',this)">
+      <span class="nav-icon">📊</span><span class="nav-label">Theo Dõi Biến Tần</span>
+    </div>
     <div class="sidebar-title" style="margin-top:14px;">Cài đặt từ xa (MQTT)</div>
-    <div class="nav-item" data-tab="tabRegs" onclick="swTab('tabRegs',this)"><span class="nav-icon">🔢</span><span class="nav-label">Thanh Ghi &amp; Field</span></div>
-    <div class="nav-item" data-tab="tabCfgOta" onclick="swTab('tabCfgOta',this)"><span class="nav-icon">🔄</span><span class="nav-label">Cập Nhật Firmware</span></div>
+    <div class="nav-item" data-tab="tabRegs" onclick="swTab('tabRegs',this)">
+      <span class="nav-icon">🔢</span><span class="nav-label">Thanh Ghi &amp; Field</span>
+    </div>
+    <div class="nav-item" data-tab="tabCfgOta" onclick="swTab('tabCfgOta',this)">
+      <span class="nav-icon">🔄</span><span class="nav-label">Cập Nhật Firmware</span>
+    </div>
     <div class="sidebar-title" style="margin-top:14px;">Cấu hình Web</div>
-    <div class="nav-item" data-tab="tabWssCfg" onclick="swTab('tabWssCfg',this)"><span class="nav-icon">🔑</span><span class="nav-label">Kết Nối Broker WSS</span></div>
-    <div class="sidebar-footer"><div>Điều khiển từ xa ESP32</div><div>GitHub Pages WSS</div></div>
+    <div class="nav-item" data-tab="tabWssCfg" onclick="swTab('tabWssCfg',this)">
+      <span class="nav-icon">🔑</span><span class="nav-label">Kết Nối Broker WSS</span>
+    </div>
+    <div class="sidebar-footer">
+      <div>Điều khiển từ xa ESP32-S3</div>
+      <div>GitHub Pages WSS</div>
+    </div>
   </aside>
 
   <main class="main">
 
-    <!-- 1. TAB THEO DÕI BIẾN TẦN -->
+    <!-- TAB 1: THEO DÕI BIẾN TẦN -->
     <div id="tabMonitor" class="tab-content active">
       <div class="power-grid">
         <!-- SOLAR PV -->
         <div class="power-card pv">
-          <div class="pc-header"><div class="pc-title"><span class="pc-icon">☀️</span> SOLAR</div><div class="pc-tag" id="tagPvDay">-- kWh</div></div>
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">☀️</span> SOLAR</div>
+            <div class="pc-tag" id="tagPvDay">-- kWh</div>
+          </div>
           <div class="pc-value"><span id="valPvTotal">0</span> <small>W</small></div>
           <div class="pc-sub"><strong>PV1:</strong> <span id="valPv1P">0</span> W · <strong>PV2:</strong> <span id="valPv2P">0</span> W</div>
           <div class="pc-rows">
@@ -185,7 +386,10 @@
 
         <!-- BATTERY & BMS -->
         <div class="power-card bat">
-          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🔋</span> BATTERY</div><div class="pc-tag" id="tagBatState">Standby</div></div>
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🔋</span> BATTERY</div>
+            <div class="pc-tag" id="tagBatState">Standby</div>
+          </div>
           <div class="pc-value"><span id="valSoc">0</span> <small>% SOC</small></div>
           <div class="soc-bar"><div class="soc-fill" id="barSoc"></div></div>
           <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVbat">0.0</span> V · <strong>Nhiệt độ:</strong> <span id="valTbat">0</span>°C</div>
@@ -202,7 +406,10 @@
 
         <!-- GRID -->
         <div class="power-card grid">
-          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🗼</span> GRID</div><div class="pc-tag" id="tagGridState">--</div></div>
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🗼</span> GRID</div>
+            <div class="pc-tag" id="tagGridState">--</div>
+          </div>
           <div class="pc-value"><span id="valPgridNet">0</span> <small>W</small></div>
           <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVgrid">0.0</span> V · <strong>Dòng lưới:</strong> <span id="valIgridNet">0.0</span> A</div>
           <div class="pc-rows">
@@ -217,7 +424,10 @@
 
         <!-- LOAD & EPS BACKUP -->
         <div class="power-card load">
-          <div class="pc-header"><div class="pc-title"><span class="pc-icon">🏠</span> LOAD</div><div class="pc-tag">Status: <span id="valStatus">0</span></div></div>
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🏠</span> LOAD</div>
+            <div class="pc-tag">Status: <span id="valStatus">0</span></div>
+          </div>
           <div class="pc-value"><span id="valPload">0</span> <small>W</small></div>
           <div class="pc-sub"><strong>Dòng tải:</strong> <span id="valIload">0.0</span> A · <strong>Inverter:</strong> <span id="valPinv">0</span> W</div>
           <div class="pc-rows">
@@ -226,7 +436,7 @@
             <div class="pc-row"><span>Tiêu thụ tải hôm nay</span><span id="valEload" style="color:var(--load);">0.0 kWh</span></div>
             <div class="pc-row"><span>Sản lượng EPS hôm nay</span><span id="valEepsDay">0.0 kWh</span></div>
             <div class="pc-row"><span>Sản lượng Inv hôm nay</span><span id="valEinvDay">0.0 kWh</span></div>
-            <div class="pc-row"><span>Nhiệt độ trong / Tản 1 / Tản 2</span><span><span id="valTinner">0</span> / <span id="valTrad1">0</span> / <span id="valTrad2">0</span> °C</span></div>
+            <div class="pc-row"><span>Nhiệt độ trong / Tản 1 / 2</span><span><span id="valTinner">0</span> / <span id="valTrad1">0</span> / <span id="valTrad2">0</span> °C</span></div>
           </div>
         </div>
       </div>
@@ -244,7 +454,7 @@
       </div>
     </div>
 
-    <!-- 2. TAB THANH GHI & FIELD (TỰ ĐỘNG ĐỒNG BỘ CÔNG TẮC GẠT) -->
+    <!-- TAB 2: THANH GHI & FIELD (TỰ ĐỘNG ĐỒNG BỘ CÔNG TẮC GẠT) -->
     <div id="tabRegs" class="tab-content">
       <div class="card" style="margin-bottom:16px;">
         <div class="card-header">
@@ -271,12 +481,12 @@
       </div>
     </div>
 
-    <!-- 3. TAB CẬP NHẬT FIRMWARE OTA TỪ XA -->
+    <!-- TAB 3: CẬP NHẬT FIRMWARE OTA TỪ XA -->
     <div id="tabCfgOta" class="tab-content">
       <div class="card">
         <div class="card-header"><span class="card-title">🔄 Cập Nhật Firmware Cho ESP32 Từ Xa (Qua MQTT)</span></div>
         <div style="background:#0f172a; padding:12px; border-radius:8px; margin-bottom:14px; font-size:0.82rem; color:var(--muted); line-height:1.7;">
-          Nhập đường dẫn trực tiếp tới file firmware <code>.bin</code> (Ví dụ: link GitHub Raw hoặc Release). ESP32 sẽ tự tải và nạp ngầm, sau đó tự khởi động lại.
+          Nhập đường dẫn trực tiếp tới file firmware <code>.bin</code> (GitHub Releases / Raw). ESP32 sẽ tự tải, nạp vào phân vùng OTA và khởi động lại.
         </div>
         <form onsubmit="remoteTriggerOTA(event)">
           <div class="form-group">
@@ -291,7 +501,7 @@
       </div>
     </div>
 
-    <!-- 4. TAB CẤU HÌNH WSS BROKER TRÊN TRÌNH DUYỆT -->
+    <!-- TAB 4: CẤU HÌNH WSS BROKER TRÊN TRÌNH DUYỆT -->
     <div id="tabWssCfg" class="tab-content">
       <form onsubmit="connectWssBroker(event)">
         <div class="card">
@@ -299,7 +509,7 @@
           <div class="form-grid">
             <div class="form-group"><label>Host Broker (Domain)</label><input type="text" id="wssHost" placeholder="xxx.s1.eu.hivemq.cloud" required></div>
             <div class="form-group"><label>Port WSS (HiveMQ: 8884, EMQX: 8084)</label><input type="number" id="wssPort" value="8884" required></div>
-            <div class="form-group"><label>Topic cơ sở (Ví dụ: luxpower/sna/state)</label><input type="text" id="wssTopic" value="luxpower/sna/state" required></div>
+            <div class="form-group"><label>Topic nhận dữ liệu (State Topic)</label><input type="text" id="wssTopic" value="luxpower/sna/state" required></div>
             <div class="form-group"><label>Username</label><input type="text" id="wssUser"></div>
             <div class="form-group">
               <label>Password</label>
@@ -329,7 +539,10 @@ let cmdTopic = "luxpower/sna/state/set";
 let heartBeatTimer = null;
 let chartPoints = [];
 
-const TELE_NAMES = ["online","mqtt_connected","mqtt_tls","wifi_rssi","s3_temp","cpu_mhz","free_heap","psram_free","psram_total","flash_size","uptime_s","ip","poll_interval","poll_ok","poll_err","p_pv_total","p_bat_net","p_load","e_pv_day_total","e_load_day"];
+const TELE_NAMES = [
+  "online","mqtt_connected","mqtt_tls","wifi_rssi","s3_temp","cpu_mhz","free_heap","psram_free","psram_total","flash_size",
+  "uptime_s","ip","poll_interval","poll_ok","poll_err","p_pv_total","p_bat_net","p_load","e_pv_day_total","e_load_day"
+];
 
 const REG_NAMES = [
   "status","v_pv1","v_pv2","v_pv3","v_bat","soc_soh","v_bat_alt","p_pv1","p_pv2","p_pv3","p_charge","p_discharge",
@@ -396,7 +609,6 @@ function loadSavedWss() {
   if (document.getElementById('wssHost').value.trim() !== '') connectWssBroker();
 }
 
-// GỬI LỆNH XUỐNG ESP32 QUA TOPIC `<topic>/set`
 function publishMqttCommand(payload) {
   if (!client || !client.connected) {
     toast('Chưa kết nối WSS Broker!', true);
@@ -455,7 +667,6 @@ function connectWssBroker(e) {
       client.subscribe(stateTopic);
       toast('Đã kết nối Broker WSS thành công!');
 
-      // Báo ESP32 rằng Web đang xem -> ESP32 bắn gói tin lên ngay lập tức
       sendHeartbeatOnline();
       heartBeatTimer = setInterval(sendHeartbeatOnline, 20000);
     });
@@ -490,10 +701,11 @@ function disconnectWssBroker() {
   }
 }
 
-// ============================================================================
-// HIỂN THỊ DỮ LIỆU VÀ TỰ ĐỘNG ĐỒNG BỘ CÔNG TẮC BẬT/TẮT THEO GÓI JSON
-// ============================================================================
 function renderIncomingData(d) {
+  if (d.device_name) {
+    document.getElementById('txtDeviceName').textContent = "Trạm: " + d.device_name;
+  }
+
   const di = document.getElementById('dotInv'), ti = document.getElementById('txtInvStatus');
   if (d.online) { di.className = 'dot ok'; ti.textContent = 'INV: ON'; flashDot(di); }
   else { di.className = 'dot err'; ti.textContent = 'INV: OFF'; }
@@ -580,15 +792,12 @@ function renderIncomingData(d) {
   document.getElementById('valEepsDay').textContent = (d.e_eps_day || (d.regs && d.regs[35] ? (d.regs[35]/10).toFixed(1) : '0.0')) + ' kWh';
   document.getElementById('valEinvDay').textContent = (d.regs && d.regs[31] ? (d.regs[31]/10).toFixed(1) : '0.0') + ' kWh';
 
-  // Thống kê ngày
   document.getElementById('statPvDay').textContent = (d.e_pv_day_total || 0).toFixed(1);
   document.getElementById('statBatNet').textContent = ((d.e_chg_day || 0) - (d.e_dischg_day || 0) >= 0 ? '+' : '') + ((d.e_chg_day || 0) - (d.e_dischg_day || 0)).toFixed(1);
   document.getElementById('statGridNet').textContent = ((d.e_to_user_day || 0) - (d.e_to_grid_day || 0)).toFixed(1);
   document.getElementById('statLoadDay').textContent = (d.e_load_day || 0).toFixed(1);
 
-  // =========================================================================
-  // TỰ ĐỘNG ĐỒNG BỘ CÔNG TẮC: GÓI JSON CÓ GÌ THÌ GẠT BẬT (ON) CÁI ĐÓ
-  // =========================================================================
+  // Tự động đồng bộ các công tắc gạt
   let onTeleCount = 0;
   TELE_NAMES.forEach((name) => {
     const el = document.querySelector(`.reg-item[data-tele="${name}"]`);
@@ -615,7 +824,6 @@ function renderIncomingData(d) {
   });
   document.getElementById('regCount').textContent = onRegCount + ' / 120';
 
-  // Cập nhật điểm đồ thị
   if (d.p_pv_total !== undefined) {
     chartPoints.push({
       pv: d.p_pv_total || 0,
@@ -662,9 +870,6 @@ function drawChart() {
   svg.innerHTML = h;
 }
 
-// ============================================================================
-// HÀM ĐIỀU KHIỂN TỪ XA QUA TOPIC `<topic>/set`
-// ============================================================================
 function remoteTriggerOTA(e) {
   e.preventDefault();
   const url = document.getElementById('otaBinUrl').value.trim();
