@@ -634,7 +634,7 @@ function handleIncomingMqttMessage(t, payload) {
       const opt = document.createElement('option');
       opt.value = mac;
       // CHỈ HIỂN THỊ TÊN THIẾT BỊ TRÊN THANH BAR
-      opt.textContent = `📍 ${devName}`;
+      opt.textContent = `${devName}`;
       sel.appendChild(opt);
 
       if (!selectedMac) {
