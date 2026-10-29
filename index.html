@@ -633,7 +633,8 @@ function handleIncomingMqttMessage(t, payload) {
       if (Object.keys(discoveredDevices).length === 1) sel.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = mac;
-      opt.textContent = `📍 ${devName} (${mac})`;
+      // CHỈ HIỂN THỊ TÊN THIẾT BỊ TRÊN THANH BAR
+      opt.textContent = `📍 ${devName}`;
       sel.appendChild(opt);
 
       if (!selectedMac) {
@@ -643,7 +644,7 @@ function handleIncomingMqttMessage(t, payload) {
     } else {
       for (let i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value === mac) {
-          sel.options[i].textContent = `📍 ${devName} (${mac})`;
+          sel.options[i].textContent = `📍 ${devName}`;
           break;
         }
       }
